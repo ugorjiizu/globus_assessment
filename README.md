@@ -15,6 +15,7 @@ globus/
 ├── app.py                      # Flask entry point & routes
 ├── config.py                   # All settings and constants
 ├── requirements.txt
+├── download_embeddings.py      # Run once while online to cache the embedding model
 │
 ├── modules/
 │   ├── llm.py                  # llama.cpp model loader (singleton)
@@ -79,7 +80,15 @@ Enforced in `response.py` — anonymous users asking about account details are b
 pip install -r requirements.txt
 ```
 
-### 2. Download a model (one-time)
+### 2. Download the embedding model (once, while online)
+
+```bash
+python download_embeddings.py
+```
+
+This caches `all-MiniLM-L6-v2` (~90 MB) into `models/embeddings/`. After this the app runs fully offline. The offline flags are set in `config.py` at the top of the file before any other imports, which prevents sentence-transformers and HuggingFace from making any network calls at runtime.
+
+### 3. Download the LLM (once, while online)
 
 ```bash
 mkdir -p models
@@ -89,9 +98,7 @@ curl -L -o models/Llama-3.2-3B-Instruct-Q4_K_M.gguf \
   https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf
 ```
 
-The embedding model (`all-MiniLM-L6-v2`, ~90 MB) downloads and caches automatically on first run.
-
-### 3. Run
+### 4. Run
 
 ```bash
 python app.py

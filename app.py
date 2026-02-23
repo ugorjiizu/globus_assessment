@@ -14,6 +14,7 @@ Server-side session state (stored in Flask session):
   history          → list of {role, content} dicts
 """
 
+from pathlib import Path
 from flask import Flask, request, jsonify, session, render_template
 
 from modules.auth import get_customer
@@ -26,7 +27,8 @@ from config import (
     ACCOUNT_NOT_FOUND_MSG,
 )
 
-app = Flask(__name__)
+_HERE = Path(__file__).parent
+app = Flask(__name__, template_folder=str(_HERE / "templates"), static_folder=str(_HERE / "static"))
 app.secret_key = SECRET_KEY
 
 # Intents that trigger a knowledge base lookup

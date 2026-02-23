@@ -4,6 +4,13 @@ All paths, model settings, and constants live here.
 """
 
 import os
+
+# Must be set before ANY other imports — prevents sentence-transformers
+# and HuggingFace from attempting network calls at load time.
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_DATASETS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 from pathlib import Path
 
 # ── Project root ─────────────────────────────────────────────────────────────
