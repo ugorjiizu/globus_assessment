@@ -38,7 +38,6 @@ def _load_workbook() -> dict:
 
         account = {
             "account_no":          str(acc_no),
-            "account_name":        record["Account_Name"],
             "currency":            record["Currency"],
             "account_type":        record["Account_Type"],
             "product_type":        record["Product_Type"],
@@ -191,3 +190,71 @@ def format_customer_context(customer: dict, queried_account: str) -> str:
                 )
 
     return "\n".join(lines)
+
+
+def block_card(account_number: str, card_issuer: str, card_type: str) -> dict:
+    """
+    Dummy card blocking function — simulates a core banking API call.
+
+    Finds the matching card by account number + issuer + type, updates
+    its in-memory status to 'Blocked', and returns a result dict.
+
+    In production, replace the status mutation with a real API call to
+    the core banking system and reflect the response here.
+
+    Args:
+        account_number: The customer's account number.
+        card_issuer:    Card issuer e.g. 'Visa', 'Verve', 'Afrigo'.
+        card_type:      Card type e.g. 'Debit', 'Credit'.
+
+    Returns:
+        dict with keys: success (bool), message (str), reference (str | None)
+    """
+    import uuid
+
+    customer = get_customer(account_number)
+    if not customer:
+        return {"success": False, "message": "Account not found.", "reference": None}
+
+    # Find the matching card (case-insensitive)
+    matched_card = None
+    for card in customer.get("cards", []):
+        issuer_match = card["card_issuer"].lower() == card_issuer.lower()
+        type_match   = card["card_type"].lower()   == card_type.lower()
+        if issuer_match and type_match:
+            matched_card = card
+            break
+
+    if not matched_card:
+        return {
+            "success":   False,
+            "message":   f"No {card_issuer} {card_type} card found on this account.",
+            "reference": None,
+        }
+
+    if matched_card["status"] == "Blocked":
+        return {
+            "success":   False,
+            "message":   "This card is already blocked.",
+            "reference": None,
+        }
+
+    # ── Dummy core banking call ───────────────────────────────────────────────
+    # In production: replace this section with a real API call, e.g.
+    #   response = core_banking_api.block_card(card_id=matched_card["id"])
+    #   if not response.ok: return {"success": False, ...}
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # Mutate in-memory status to reflect the block
+    matched_card["status"] = "Blocked"
+
+    reference = f"BLK-{uuid.uuid4().hex[:8].upper()}"
+
+    return {
+        "success":   True,
+        "message":   (
+            f"Your {matched_card['card_issuer']} {matched_card['card_type']} card "
+            f"linked to account {matched_card['account_no']} has been successfully blocked."
+        ),
+        "reference": reference,
+    }

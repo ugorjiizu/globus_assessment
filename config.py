@@ -61,6 +61,7 @@ INTENTS = [
     "general_inquiry",
     "account_information",
     "product_inquiry",
+    "card_block_request",
 ]
 
 # ── User-facing messages ──────────────────────────────────────────────────────
@@ -72,4 +73,9 @@ ACCOUNT_NOT_FOUND_MSG = (
 ANONYMOUS_RESTRICTION_MSG = (
     "I can only provide general product information for unauthenticated sessions. "
     "Please provide a valid account number for account-specific assistance."
+)
+
+CARD_BLOCK_ANONYMOUS_MSG = (
+    "Card blocking requires a verified account. "
+    "Please provide your account number so I can assist you."
 )

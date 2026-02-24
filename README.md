@@ -60,6 +60,7 @@ response.py ─── enforce access control + build prompt + generate reply (lo
 | `general_inquiry` | Yes |
 | `account_information` | No |
 | `product_inquiry` | Yes |
+| `card_block_request` | No |
 
 ### Access control
 Enforced in `response.py` — anonymous users asking about account details are blocked at the response layer, not the intent layer. This keeps the classifier pure and independently testable.
@@ -160,6 +161,7 @@ The `intent` field in the response shows you what the bot classified your messag
 | `account_information` | `"What is my balance?"`, `"Show my recent transactions"`, `"What cards do I have?"` |
 | `product_inquiry` | `"Tell me about your loan products"`, `"What is a Treasury Bill?"` |
 | `general_inquiry` | `"How can you help me?"` |
+| `card_block_request` | `"I want to block my card"`, `"Please freeze my ATM card"` |
 
 **Response (no active session — 403):**
 ```json
@@ -168,7 +170,50 @@ The `intent` field in the response shows you what the bot classified your messag
 
 ---
 
-### 3. `POST /api/reset`
+
+### 3. `POST /api/block-card`
+Executes the card block once the customer has confirmed which card to block via the chat flow. Requires an active authenticated session.
+
+**Body:**
+```json
+{
+  "card_issuer": "Visa",
+  "card_type": "Credit"
+}
+```
+
+**Response (success, 200):**
+```json
+{
+  "success": true,
+  "message": "Your Visa Credit card linked to account 100023489 has been successfully blocked.",
+  "reference": "BLK-A3F9C21D"
+}
+```
+
+**Response (card not found, 404):**
+```json
+{
+  "success": false,
+  "message": "No Visa Credit card found on this account.",
+  "reference": null
+}
+```
+
+**Response (already blocked, 400):**
+```json
+{
+  "success": false,
+  "message": "This card is already blocked.",
+  "reference": null
+}
+```
+
+> **Note:** In production, replace `block_card()` in `modules/auth.py` with a real core banking API call. This endpoint and its validation logic stay the same.
+
+---
+
+### 4. `POST /api/reset`
 Clears the session. No body required.
 
 **Response:**
@@ -184,7 +229,10 @@ Clears the session. No body required.
 1. `POST /api/authenticate` → `{"account_number": "100023489"}`
 2. `POST /api/chat` → `{"message": "What is my balance?"}`
 3. `POST /api/chat` → `{"message": "Tell me about mortgage loans"}`
-4. `POST /api/reset`
+4. `POST /api/chat` → `{"message": "I want to block my card"}` — bot lists cards and asks which to block
+5. `POST /api/chat` → `{"message": "Block the Visa credit card"}` — bot confirms
+6. `POST /api/block-card` → `{"card_issuer": "Visa", "card_type": "Credit"}` — executes the block, returns reference number
+7. `POST /api/reset`
 
 **Anonymous user (product queries only):**
 1. `POST /api/authenticate` → `{"account_number": "000000000"}` (invalid)

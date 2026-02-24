@@ -2,8 +2,9 @@
 modules/response.py — Response generation using the local LLM.
 
 Responsibilities:
-  - Enforce access control (anonymous users cannot receive account info)
+  - Enforce access control (anonymous users cannot receive account info or block cards)
   - Build the full prompt: system instructions + customer context + product docs + history
+  - For card_block_request: detect multiple cards and ask for clarification if needed
   - Call the LLM and return the assistant's reply
 
 Access control is enforced HERE, not in the intent classifier.
@@ -12,7 +13,12 @@ This keeps each module single-purpose and independently testable.
 
 from modules.llm import generate
 from modules.auth import format_customer_context
-from config import LLM_MAX_TOKENS, LLM_TEMPERATURE, ANONYMOUS_RESTRICTION_MSG
+from config import (
+    LLM_MAX_TOKENS,
+    LLM_TEMPERATURE,
+    ANONYMOUS_RESTRICTION_MSG,
+    CARD_BLOCK_ANONYMOUS_MSG,
+)
 
 # ── Prompt building blocks ────────────────────────────────────────────────────
 
@@ -21,9 +27,7 @@ You assist customers with enquiries about their accounts, transactions, cards, l
 savings accounts, and investment products.
 Be warm, accurate, and concise. Use Nigerian Naira (NGN) unless the account is a domiciliary account.
 Never invent interest rates, fees, or product terms not provided to you. \
-If you are unsure, advise the customer to visit a branch or call Globus Bank customer service. \
-Always prioritise customer security and privacy. Do not ask for or reveal sensitive information unless necessary. \
-Keep it all about Globus Bank — do not discuss other banks or financial institutions and their products."""
+If you are unsure, advise the customer to visit a branch or call Globus Bank customer service."""
 
 _CUSTOMER_BLOCK = """
 The customer is authenticated. Use their full profile below to give accurate, personalised responses.
@@ -48,9 +52,42 @@ PRODUCT DOCUMENTATION:
 {docs}
 """
 
+_CARD_BLOCK_SYSTEM = """
+The customer wants to block one of their ATM/debit cards.
+
+INSTRUCTIONS:
+- If the customer has only ONE card, confirm which card it is (issuer, type, account) and ask them \
+to confirm they want it blocked before proceeding.
+- If the customer has MULTIPLE cards, list each card clearly (issuer, card type, linked account number) \
+and ask them to specify which one they want blocked.
+- Once the customer confirms a specific card, acknowledge the request and inform them that the card \
+block has been initiated and they will receive a confirmation shortly.
+- Do not block any card without explicit customer confirmation.
+- If no cards are found on the account, inform the customer and advise them to visit a branch.
+
+CUSTOMER CARDS:
+{cards}
+"""
+
+
+def _format_cards(customer: dict) -> str:
+    """Format the customer's card list for injection into the card block prompt."""
+    cards = customer.get("cards", [])
+    if not cards:
+        return "No cards found on this account."
+    lines = []
+    for i, card in enumerate(cards, 1):
+        lines.append(
+            f"  Card {i}: {card['card_issuer']} {card['card_type']} Card "
+            f"| Linked to Account: {card['account_no']} "
+            f"| Status: {card['status']}"
+        )
+    return "\n".join(lines)
+
 
 def _build_prompt(
     message: str,
+    intent: str,
     customer: dict | None,
     queried_account: str | None,
     product_docs: str | None,
@@ -66,6 +103,9 @@ def _build_prompt(
         system += _CUSTOMER_BLOCK.format(
             context=format_customer_context(customer, queried_account or "")
         )
+        # Inject card block instructions when relevant
+        if intent == "card_block_request":
+            system += _CARD_BLOCK_SYSTEM.format(cards=_format_cards(customer))
     else:
         system += _ANONYMOUS_BLOCK
 
@@ -106,12 +146,16 @@ def generate_response(
     Returns:
         Assistant reply as a plain string.
     """
-    # Hard access control: block account queries for unauthenticated sessions
-    if intent == "account_information" and customer is None:
-        return ANONYMOUS_RESTRICTION_MSG
+    # Hard access control for unauthenticated sessions
+    if customer is None:
+        if intent == "account_information":
+            return ANONYMOUS_RESTRICTION_MSG
+        if intent == "card_block_request":
+            return CARD_BLOCK_ANONYMOUS_MSG
 
     prompt = _build_prompt(
         message=message,
+        intent=intent,
         customer=customer,
         queried_account=queried_account,
         product_docs=product_docs,

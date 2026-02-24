@@ -1,17 +1,17 @@
 """
 modules/intent.py — Intent classification using the local LLM.
 
-Classifies each user message into exactly one of four intents:
+Classifies each user message into exactly one of five intents:
   - greeting
   - general_inquiry
   - account_information
   - product_inquiry
+  - card_block_request
 
 Uses temperature=0 and a tight stop sequence for deterministic output.
 Falls back to 'general_inquiry' on any parse failure.
 """
 
-import re
 from modules.llm import generate
 from config import INTENTS, INTENT_MAX_TOKENS, INTENT_TEMPERATURE
 
@@ -23,10 +23,11 @@ You are an intent classifier for a Globus Bank customer support chatbot.
 Classify the user message into exactly one intent from this list:
 - greeting: user is saying hello or starting a conversation
 - general_inquiry: broad or unclear question not specifically about their account or a product
-- account_information: question about their account balance, transactions, cards, account status, or account details
+- account_information: question about account balance, transactions, account status, or account details
 - product_inquiry: question about bank products (loans, savings, investments, debit cards, features, eligibility)
+- card_block_request: user wants to block, freeze, or deactivate an ATM or debit card
 
-Reply with ONLY the intent name. No explanation. No punctuation. Just the single intent word or phrase.
+Reply with ONLY the intent name. No explanation. No punctuation. Just the single intent.
 <|end|>
 <|user|>
 Message: {message}
@@ -38,7 +39,7 @@ def classify_intent(message: str) -> str:
     """
     Classify the intent of a user message.
 
-    Returns one of: 'greeting', 'general_inquiry', 'account_information', 'product_inquiry'.
+    Returns one of the five intent strings.
     Defaults to 'general_inquiry' on any failure.
     """
     try:
@@ -55,7 +56,7 @@ def classify_intent(message: str) -> str:
         if first_word in INTENTS:
             return first_word
 
-        # Fuzzy fallback — handle outputs like "account_information." or partial matches
+        # Fuzzy fallback — handle partial or slightly off outputs
         for intent in INTENTS:
             if intent in raw.lower():
                 return intent
